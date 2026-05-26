@@ -68,6 +68,8 @@ pub mod nginx_metrics;
 pub mod okta;
 #[cfg(feature = "sources-opentelemetry")]
 pub mod opentelemetry;
+#[cfg(feature = "sources-postgresql_cdc")]
+pub mod postgresql_cdc;
 #[cfg(feature = "sources-postgresql_metrics")]
 pub mod postgresql_metrics;
 #[cfg(any(

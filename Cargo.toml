@@ -442,6 +442,7 @@ stream-cancel = { version = "0.8.2", default-features = false }
 strip-ansi-escapes = { version = "0.2.1", default-features = false }
 syslog = { version = "6.1.1", default-features = false, optional = true }
 tokio-postgres = { version = "0.7.13", default-features = false, features = ["runtime", "with-chrono-0_4"], optional = true }
+pgwire-replication = { version = "0.3.2", default-features = false, features = ["scram"], optional = true }
 tokio-tungstenite = { workspace = true, features = ["connect"], optional = true }
 toml.workspace = true
 hickory-proto = { workspace = true, optional = true }
@@ -685,6 +686,7 @@ sources-logs = [
   "sources-nats",
   "sources-okta",
   "sources-opentelemetry",
+  "sources-postgresql_cdc",
   "sources-pulsar",
   "sources-file_descriptor",
   "sources-redis",
@@ -756,6 +758,7 @@ sources-opentelemetry = [
   "sources-utils-http-headers",
   "sources-vector",
 ]
+sources-postgresql_cdc = ["dep:postgres-openssl", "dep:pgwire-replication", "dep:tokio-postgres"]
 sources-postgresql_metrics = ["dep:postgres-openssl", "dep:tokio-postgres"]
 sources-prometheus = ["sources-prometheus-scrape", "sources-prometheus-remote-write", "sources-prometheus-pushgateway"]
 sources-prometheus-scrape = ["sinks-prometheus", "sources-utils-http-client", "vector-lib/prometheus"]
@@ -1006,6 +1009,7 @@ all-integration-tests = [
   "nats-integration-tests",
   "nginx-integration-tests",
   "opentelemetry-integration-tests",
+  "postgresql_cdc-integration-tests",
   "postgresql_metrics-integration-tests",
   "postgres_sink-integration-tests",
   "prometheus-integration-tests",
@@ -1076,6 +1080,8 @@ mqtt-integration-tests = ["sinks-mqtt", "sources-mqtt"]
 nats-integration-tests = ["sinks-nats", "sources-nats"]
 nginx-integration-tests = ["sources-nginx_metrics"]
 opentelemetry-integration-tests = ["sources-opentelemetry", "dep:prost"]
+postgresql_cdc-integration-tests = ["sources-postgresql_cdc"]
+postgresql_cdc-benchmarks = ["postgresql_cdc-integration-tests"]
 postgresql_metrics-integration-tests = ["sources-postgresql_metrics"]
 postgres_sink-integration-tests = ["sinks-postgres"]
 prometheus-integration-tests = ["sinks-prometheus", "sources-prometheus", "sinks-influxdb"]

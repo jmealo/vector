@@ -107,6 +107,8 @@ mod open;
     feature = "sinks-datadog_events",
 ))]
 mod parser;
+#[cfg(feature = "sources-postgresql_cdc")]
+mod postgresql_cdc;
 #[cfg(feature = "sources-postgresql_metrics")]
 mod postgresql_metrics;
 mod process;
@@ -256,6 +258,8 @@ pub(crate) use self::nginx_metrics::*;
     feature = "sinks-datadog_events",
 ))]
 pub(crate) use self::parser::*;
+#[cfg(feature = "sources-postgresql_cdc")]
+pub(crate) use self::postgresql_cdc::*;
 #[cfg(feature = "sources-postgresql_metrics")]
 pub(crate) use self::postgresql_metrics::*;
 #[cfg(any(

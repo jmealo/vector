@@ -130,6 +130,7 @@ jobs:
             "nginx",
             "opentelemetry",
             "postgres",
+            "postgresql_cdc",
             "prometheus",
             "pulsar",
             "redis",

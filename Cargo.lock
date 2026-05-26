@@ -8241,6 +8241,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pgwire-replication"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eec6334b2466a0163bd91c29e06a25b391c155231934aee80381b99560e240e"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bytes",
+ "hmac",
+ "rand 0.9.4",
+ "sha2",
+ "thiserror 1.0.68",
+ "tokio",
+ "tokio-util",
+ "tracing 0.1.44",
+]
+
+[[package]]
 name = "phf"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13136,6 +13154,7 @@ dependencies = [
  "parquet",
  "pastey",
  "percent-encoding",
+ "pgwire-replication",
  "pin-project",
  "postgres-openssl",
  "procfs",

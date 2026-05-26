@@ -64,6 +64,7 @@ components: sources: postgresql_metrics: {
 				- `pg_stat_database`
 				- `pg_stat_database_conflicts`
 				- `pg_stat_bgwriter`
+				- `pg_replication_slots`
 				"""
 		}
 	}
@@ -88,10 +89,22 @@ components: sources: postgresql_metrics: {
 			}
 		}
 		_postgresql_metrics_tags_with_db: _postgresql_metrics_tags & {
-			type: {
+			db: {
 				description: "Database name."
 				required:    true
 				examples: ["postgres"]
+			}
+		}
+		_postgresql_replication_slot_tags: _postgresql_metrics_tags_with_db & {
+			slot_name: {
+				description: "The name of the replication slot."
+				required:    true
+				examples: ["vector_slot"]
+			}
+			wal_status: {
+				description: "The status of the WAL files for this slot (PG 13+)."
+				required:    false
+				examples: ["reserved", "extended", "lost"]
 			}
 		}
 
@@ -316,6 +329,24 @@ components: sources: postgresql_metrics: {
 			type:              "gauge"
 			default_namespace: "postgresql"
 			tags:              _postgresql_metrics_tags
+		}
+		pg_replication_slots_active: {
+			description:       "Whether the replication slot is currently active."
+			type:              "gauge"
+			default_namespace: "postgresql"
+			tags:              _postgresql_replication_slot_tags
+		}
+		pg_replication_slots_restart_lag_bytes: {
+			description:       "The amount of WAL data (in bytes) that must be retained for this slot since its `restart_lsn`. Not emitted when PostgreSQL returns NULL (for example, on a standby server where `pg_current_wal_lsn()` is unavailable, or when the slot has no `restart_lsn` yet)."
+			type:              "gauge"
+			default_namespace: "postgresql"
+			tags:              _postgresql_replication_slot_tags
+		}
+		pg_replication_slots_confirmed_lag_bytes: {
+			description:       "The amount of WAL data (in bytes) between the current WAL position and the slot's `confirmed_flush_lsn`. Not emitted when PostgreSQL returns NULL (for example, on a standby server, or when the slot has not yet confirmed any flush)."
+			type:              "gauge"
+			default_namespace: "postgresql"
+			tags:              _postgresql_replication_slot_tags
 		}
 	}
 }

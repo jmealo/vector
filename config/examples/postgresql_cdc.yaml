@@ -1,0 +1,34 @@
+# PostgreSQL CDC Example
+# ------------------------------------------------------------------------------
+# Streams logical-replication change events (INSERT / UPDATE / DELETE / TRUNCATE)
+# from a PostgreSQL database into a console sink as JSON. The source attaches
+# to an existing publication and replication slot using PostgreSQL's built-in
+# `pgoutput` plugin.
+#
+# Prerequisites (run on the database, as a superuser or replication-privileged
+# user):
+#
+#   ALTER SYSTEM SET wal_level = logical;
+#   -- restart Postgres for wal_level to take effect
+#
+#   CREATE PUBLICATION vector_pub FOR TABLE orders, customers;
+#   SELECT pg_create_logical_replication_slot('vector_slot', 'pgoutput');
+#
+# Acknowledgements are enabled by default for this source: the slot's
+# `confirmed_flush_lsn` only advances after every event from a transaction has
+# been acknowledged by the downstream sink. This is what makes the source safe
+# to use as the head of a critical-path data pipeline.
+
+sources:
+  postgres_cdc:
+    type: "postgresql_cdc"
+    connection_string: "postgres://vector:vector@127.0.0.1:5432/app"
+    replication_slot: "vector_slot"
+    publication_name: "vector_pub"
+
+sinks:
+  out:
+    inputs: ["postgres_cdc"]
+    type: "console"
+    encoding:
+      codec: "json"

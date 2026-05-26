@@ -1,0 +1,28 @@
+version: "3"
+
+services:
+  postgres:
+    image: docker.io/postgres:${CONFIG_VERSION}
+    environment:
+      - POSTGRES_USER=vector
+      - POSTGRES_PASSWORD=vector
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=100
+      - -c
+      - max_wal_senders=100
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vector"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+networks:
+  default:
+    name: ${VECTOR_NETWORK}
+    external: true

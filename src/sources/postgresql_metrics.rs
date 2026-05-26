@@ -359,6 +359,11 @@ impl PostgresqlClient {
 struct DatnameFilter {
     pg_stat_database_sql: String,
     pg_stat_database_conflicts_sql: String,
+    /// Optional WHERE-clause filter (without the `WHERE` keyword) keyed on
+    /// `pg_replication_slots.database`, so slot metrics respect the same
+    /// include/exclude rules as per-database stats. None when no filter
+    /// was configured.
+    pg_replication_slots_filter_sql: Option<String>,
     match_params: Vec<String>,
 }
 
@@ -404,9 +409,23 @@ impl DatnameFilter {
             pg_stat_database_conflicts_sql += &match_sql;
         }
 
+        // Build a copy of the match SQL keyed on `database` instead of
+        // `datname` for the slot query. `pg_replication_slots` always has a
+        // value for `database` on logical slots, and NULL for physical
+        // slots — physical slots are kept out of `include_null`/`exclude_null`
+        // handling because they don't carry a database identity in the same
+        // sense (they're cluster-wide). The same parameter indices are
+        // reused so we can share `match_params`.
+        let pg_replication_slots_filter_sql = if match_sql.is_empty() {
+            None
+        } else {
+            Some(match_sql.replace("datname ", "database "))
+        };
+
         Self {
             pg_stat_database_sql,
             pg_stat_database_conflicts_sql,
+            pg_replication_slots_filter_sql,
             match_params,
         }
     }
@@ -483,6 +502,52 @@ impl DatnameFilter {
         client
             .query_one("SELECT * FROM pg_stat_bgwriter", &[])
             .await
+    }
+
+    async fn pg_replication_slots(
+        &self,
+        client: &Client,
+        version: usize,
+    ) -> Result<Vec<Row>, PgError> {
+        let lsn_func = if version >= 100000 {
+            "pg_current_wal_lsn()"
+        } else {
+            "pg_current_xlog_location()"
+        };
+        let diff_func = if version >= 100000 {
+            "pg_wal_lsn_diff"
+        } else {
+            "pg_xlog_location_diff"
+        };
+        let wal_status = if version >= 130000 {
+            "wal_status"
+        } else {
+            "'unknown' AS wal_status"
+        };
+
+        let mut sql = format!(
+            "SELECT slot_name, active, database, {}, \
+                    CASE WHEN NOT pg_is_in_recovery() \
+                         THEN {}({}, restart_lsn)::float8 \
+                         ELSE NULL END AS restart_lag_bytes, \
+                    CASE WHEN confirmed_flush_lsn IS NOT NULL AND NOT pg_is_in_recovery() \
+                         THEN {}({}, confirmed_flush_lsn)::float8 \
+                         ELSE NULL END AS confirmed_lag_bytes \
+             FROM pg_replication_slots",
+            wal_status, diff_func, lsn_func, diff_func, lsn_func
+        );
+
+        // Apply the same include/exclude database filter the user
+        // configured for pg_stat_database. Physical slots have a NULL
+        // `database` and are always emitted — they describe cluster-wide
+        // state, not a single database.
+        if let Some(filter) = &self.pg_replication_slots_filter_sql {
+            sql.push_str(" WHERE (database IS NULL OR ");
+            sql.push_str(filter);
+            sql.push(')');
+        }
+
+        client.query(&sql, self.get_match_params().as_slice()).await
     }
 }
 
@@ -568,6 +633,8 @@ impl PostgresqlMetrics {
                 .boxed(),
             self.collect_pg_stat_database_conflicts(&client).boxed(),
             self.collect_pg_stat_bgwriter(&client).boxed(),
+            self.collect_pg_replication_slots(&client, client_version)
+                .boxed(),
         ])
         .await
         {
@@ -861,6 +928,62 @@ impl PostgresqlMetrics {
         ))
     }
 
+    async fn collect_pg_replication_slots(
+        &self,
+        client: &Client,
+        client_version: usize,
+    ) -> Result<(Vec<Metric>, usize), CollectError> {
+        let rows = self
+            .datname_filter
+            .pg_replication_slots(client, client_version)
+            .await
+            .context(QuerySnafu)?;
+
+        let mut metrics = Vec::with_capacity(5 * rows.len());
+        let mut reader = RowReader::default();
+        for row in rows.iter() {
+            let slot_name = reader.read::<&str>(row, "slot_name")?;
+            let db = reader.read::<Option<&str>>(row, "database")?.unwrap_or("");
+            let active = reader.read::<bool>(row, "active")?;
+            let wal_status = reader.read::<&str>(row, "wal_status")?;
+
+            let tags = tags!(
+                self.tags,
+                "slot_name" => slot_name,
+                "db" => db,
+                "wal_status" => wal_status
+            );
+
+            metrics.push(self.create_metric(
+                "pg_replication_slots_active",
+                gauge!(if active { 1.0 } else { 0.0 }),
+                tags.clone(),
+            ));
+
+            // Lag metrics are NULL when the slot has no committed position
+            // (e.g. on a standby where `pg_current_wal_lsn()` is unavailable,
+            // or when `confirmed_flush_lsn` has never been set). Emit only
+            // when a real value is present, so a missing data point is
+            // distinguishable from a genuine 0-byte lag in dashboards and
+            // alerts.
+            if let Some(restart_lag) = reader.read::<Option<f64>>(row, "restart_lag_bytes")? {
+                metrics.push(self.create_metric(
+                    "pg_replication_slots_restart_lag_bytes",
+                    gauge!(restart_lag),
+                    tags.clone(),
+                ));
+            }
+            if let Some(confirmed_lag) = reader.read::<Option<f64>>(row, "confirmed_lag_bytes")? {
+                metrics.push(self.create_metric(
+                    "pg_replication_slots_confirmed_lag_bytes",
+                    gauge!(confirmed_lag),
+                    tags,
+                ));
+            }
+        }
+        Ok((metrics, reader.into_inner()))
+    }
+
     fn create_metric(&self, name: &str, value: MetricValue, tags: MetricTags) -> Metric {
         Metric::new(name, MetricKind::Absolute, value)
             .with_namespace(self.namespace.clone())
@@ -1011,6 +1134,7 @@ mod integration_tests {
         test_util::{
             components::{PULL_SOURCE_TAGS, assert_source_compliance},
             integration::postgres::{pg_socket, pg_url},
+            random_string,
         },
         tls,
     };
@@ -1185,6 +1309,58 @@ mod integration_tests {
 
             if let Some(db) = metric.tags().unwrap().get("db") {
                 assert!(db == "template1");
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_replication_slots() {
+        let url = pg_url();
+        let (client, connection) = tokio_postgres::connect(&url, NoTls).await.unwrap();
+        tokio::spawn(connection);
+
+        // Use a randomized slot name so parallel test runs and leftover
+        // state from earlier aborted runs do not collide. Drop-if-exists
+        // before creating so a previously-leaked slot of the same name
+        // does not fail the create.
+        let slot_name = format!("vector_test_metrics_{}", random_string(8).to_lowercase());
+        let _ = client
+            .query(
+                "SELECT pg_drop_replication_slot($1) WHERE EXISTS \
+                 (SELECT 1 FROM pg_replication_slots WHERE slot_name = $1)",
+                &[&slot_name],
+            )
+            .await;
+
+        // Create a temporary slot. `pg_create_logical_replication_slot`
+        // requires `wal_level=logical`. If the test environment does not
+        // support it, skip this check.
+        match client
+            .query(
+                "SELECT pg_create_logical_replication_slot($1, 'pgoutput')",
+                &[&slot_name],
+            )
+            .await
+        {
+            Ok(_) => {
+                let events = test_postgresql_metrics(url, None, None, None).await;
+
+                assert!(
+                    events
+                        .iter()
+                        .any(|e| e.as_metric().name() == "pg_replication_slots_active")
+                );
+
+                // Clean up
+                let _ = client
+                    .query("SELECT pg_drop_replication_slot($1)", &[&slot_name])
+                    .await;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    message = "Skipping replication slot test; environment does not support logical replication.",
+                    error = %e
+                );
             }
         }
     }
