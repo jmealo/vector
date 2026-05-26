@@ -7,6 +7,7 @@ amz
 amzn
 anchore
 andy
+antipattern
 apievent
 apipodspec
 apk
@@ -73,18 +74,21 @@ buffereventsdropped
 buffereventsreceived
 buffereventssent
 bufferpin
+BYPASSRLS
 bvalue
 bwsnrn
 bytesize
 califrag
 califragilistic
 CAROOT
+cdc
 cddl
 cdylib
 cef
 centiseconds
 cernan
 CFFI
+CREATEROLE
 CGP
 cgroups
 chartmuseum
@@ -295,6 +299,7 @@ jsonify
 jsonlines
 jszwedko
 kebabcase
+keepalives
 kernelmode
 keyclock
 keyxxxxx
@@ -311,9 +316,11 @@ landingpad
 leebenson
 leveldb
 libcrypto
+libpq
 librdkafka
 libvector
 lld
+lsn
 loadbalancer
 logdna
 logevents
@@ -329,6 +336,7 @@ lpush
 lucperkins
 lukesteensen
 lvl
+macaddr
 maj
 majorly
 makecache
@@ -406,6 +414,7 @@ nsecs
 ntoa
 ntp
 nullishness
+NULs
 NUMA
 numbackends
 NXRR
@@ -434,10 +443,13 @@ pascalcase
 PEMS
 percpu
 pgo
+pgoutput
+pgwire
 PIDs
 PII
 plainify
 plds
+RLS
 ple
 podspec
 Ponge
@@ -588,6 +600,7 @@ threatmanager
 Throughputs
 Tiltfile
 timberio
+timestamptz
 TIMESTAMPTZ
 TKEY
 tlh
@@ -645,6 +658,8 @@ vrl
 vsize
 vts
 Wakely
+wal
+walsender
 waninfo
 wasmtime
 watchexec
@@ -668,6 +683,7 @@ wtime
 wtimeout
 WTS
 xact
+xid
 xlarge
 xxs
 YAMLs

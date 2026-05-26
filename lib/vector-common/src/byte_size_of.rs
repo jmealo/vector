@@ -161,6 +161,7 @@ num!(i64);
 num!(i128);
 num!(f32);
 num!(f64);
+num!(bool);
 
 impl ByteSizeOf for Box<RawValue> {
     fn allocated_bytes(&self) -> usize {
